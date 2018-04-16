@@ -43,7 +43,7 @@ library(caTools)
 library(randomForest)
 prop.table(table(traindfFinal$stroke))
 traindfFinal$stroke <- as.factor(traindfFinal$stroke)
-trainSMOTE <- SMOTE(stroke ~., data = traindfFinal, perc.over = 400, perc.under = 200)
+trainSMOTE <- SMOTE(stroke ~., data = traindfFinal, perc.over = 500, perc.under = 200)
 
 prop.table(table(trainSMOTE$stroke))
 table(traindfFinal$stroke)
@@ -59,7 +59,7 @@ tRF2 <- tuneRF(x = trainSMOTE[,-c(1,2)],
                trace=TRUE, 
                plot = TRUE,
                doBest = TRUE,
-               nodesize = 20, 
+               nodesize = 3, 
                importance=TRUE
 )
 
