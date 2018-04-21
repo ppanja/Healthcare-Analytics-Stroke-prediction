@@ -4,6 +4,8 @@ library(mice)
 library(randomForest)
 library(ineq)
 library(data.table)
+library(MLmetrics)
+library(lightgbm)
 
 ### Read Train and impute missing values ###
 
@@ -113,7 +115,6 @@ train_sparse1 = Matrix(as.matrix(data1[!is.na(data1$stroke), varnames1, with=FAL
 #train_sparse = Matrix(as.matrix(data2[!is.na(data2$target), varnames, with=FALSE]), sparse=TRUE)
 test_sparse1  = Matrix(as.matrix(data1[is.na(data1$stroke) , varnames1, with=FALSE]), sparse=TRUE)
 #View(test_sparse1)
-#attach(data1)
 
 y_train  = data1[!is.na(stroke),stroke]
 test_ids = data1[is.na(data1$stroke),id]
@@ -126,17 +127,19 @@ categoricals.vec = colnames(data1)[c(3,4,5,6,7,8,9,10,11,12)]
 
 lgb.grid = list(objective = "binary",
                 metric = "auc",
-                min_sum_hessian_in_leaf = 1,
+                min_sum_hessian_in_leaf = 10,
                 feature_fraction = 0.7,
                 bagging_fraction = 0.7,
                 bagging_freq = 1,
-                #                min_data = 100,
-                #                max_bin = 50,
-                #                lambda_l1 = 8,
-                #                lambda_l2 = 1.3,
-                min_data_in_bin=50,
-                #                min_gain_to_split = 10,
-                #                min_data_in_leaf = 30,
+                learning_rate = .001,
+                #max_bin = 50,
+                num_iterations = 501,
+                lambda_l1 = 2,
+                lambda_l2 = 1.3,
+                #min_data_in_bin=50,
+                #min_gain_to_split = 1,
+                min_data_in_leaf = 20,
+                num_leaves = 31,
                 is_unbalance = TRUE)
 
 ##Setting up Gini Eval Function
@@ -148,22 +151,23 @@ lgb.normalizedgini = function(preds, dtrain){
 }
 
 ##Cross Validation
-library(MLmetrics)
-lgb.model.cv = lgb.cv(params = lgb.grid, data = lgb.train, learning_rate = 0.001, num_leaves = 3,num_threads = 2 , 
-                      nrounds = 100, early_stopping_rounds = 10,eval_freq = 2, eval = lgb.normalizedgini,
+
+lgb.model.cv = lgb.cv(params = lgb.grid, data = lgb.train, num_threads = 2 , 
+                      nrounds = 501, early_stopping_rounds = 10,eval_freq = 2, 
+                      eval = lgb.normalizedgini,
                       categorical_feature = categoricals.vec, nfold = 5, stratified = TRUE)
 
 best.iter = lgb.model.cv$best_iter
-#best.iter = 1
+#best.iter = 64
 
 # Train final model
-lgb.model = lgb.train(params = lgb.grid, data = lgb.train, learning_rate = 0.001,
-                      num_leaves = 3, num_threads = 2 , nrounds = 3,
-                      eval_freq = 2, eval = lgb.normalizedgini,
+lgb.model = lgb.train(params = lgb.grid, data = lgb.train, num_threads = 2 , 
+                      nrounds = 501, early_stopping_rounds = 10,eval_freq = 2, 
+                      eval = lgb.normalizedgini,
                       categorical_feature = categoricals.vec)
 
 # Create and Submit Predictions
-library(data.table)
+#library(data.table)
 preds = data.table(id=test_ids, stroke=predict(lgb.model,test_sparse1))
 colnames(preds)[1] = "id"
 fwrite(preds, "submission.csv")
